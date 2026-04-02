@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { useApp, ROLES } from "../context/AppContext";
+import { useApp } from "../context/AppContext";
 
-/* ── Eye / EyeOff icons — no external dep ── */
 function IconEye() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
@@ -22,12 +21,11 @@ function IconEyeOff() {
   );
 }
 
-/* ── Demo credential pills ── */
-const DEMO_CREDENTIALS = [
-  { id: "ADMIN001", pw: "admin123",   role: "admin",      label: "Admin",      color: "#0066ff" },
-  { id: "TCH001",   pw: "teacher123", role: "teacher",    label: "Teacher",    color: "#10b981" },
-  { id: "STU001",   pw: "student123", role: "student",    label: "Student",    color: "#f59e0b" },
-  { id: "ACC001",   pw: "account123", role: "accountant", label: "Accountant", color: "#8b5cf6" },
+const DEMO = [
+  { id: "ADMIN001", pw: "admin123",   label: "Admin",      color: "#2563eb" },
+  { id: "TCH001",   pw: "teacher123", label: "Teacher",    color: "#059669" },
+  { id: "STU001",   pw: "student123", label: "Student",    color: "#d97706" },
+  { id: "ACC001",   pw: "account123", label: "Accountant", color: "#7c3aed" },
 ];
 
 export default function Login() {
@@ -44,170 +42,115 @@ export default function Login() {
     setError("");
     if (!loginId.trim()) { setError("Please enter your Login ID."); return; }
     if (!password)        { setError("Please enter your password."); return; }
-
     setLoading(true);
-    // Simulate network delay for premium feel
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 500));
     const res = login(loginId, password);
     setLoading(false);
-
     if (!res.success) setError(res.error);
   }
 
-  function fillDemo(cred) {
-    setLoginId(cred.id);
-    setPassword(cred.pw);
-    setError("");
-  }
-
   return (
-    <div className="lp-container">
+    <div className="lp">
 
-      {/* ── LEFT — Branding ── */}
+      {/* ── LEFT ── */}
       <div className="lp-left">
-        <div className="lp-overlay">
+        <div className="lp-left-inner">
+          <div className="lp-brand-mark">eS</div>
+          <h1 className="lp-brand-name">eSchoolOS</h1>
+          <p className="lp-brand-tag">Smart, modern school management</p>
 
-          {/* top badge */}
-          <div style={{ position: "absolute", top: 32, left: 32 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div className="lp-logo-mark">eS</div>
-              <span style={{ color: "white", fontWeight: 600, fontSize: 18, letterSpacing: "-0.3px" }}>eSchoolOS</span>
-            </div>
-          </div>
+          <div className="lp-brand-divider" />
 
-          {/* centre content */}
-          <div className="lp-hero">
-            <div className="lp-pill">🏫 Smart School ERP</div>
-            <h1 className="lp-headline">Managing schools,<br/>the smart way.</h1>
-            <p className="lp-tagline">
-              All-in-one platform for admissions, attendance, fees,<br/>
-              academics & communication — built for modern schools.
-            </p>
-
-            <div className="lp-feature-tiles">
-              {[
-                { icon: "👥", label: "Students",      val: "1,284" },
-                { icon: "📅", label: "Attendance",    val: "94.2%" },
-                { icon: "💰", label: "Fees Collected",val: "₹4.8L" },
-                { icon: "👩‍🏫", label: "Teachers",     val: "68" },
-              ].map((f) => (
-                <div key={f.label} className="lp-tile">
-                  <div className="lp-tile-icon">{f.icon}</div>
-                  <div>
-                    <div className="lp-tile-val">{f.val}</div>
-                    <div className="lp-tile-label">{f.label}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* bottom school name */}
-          <div style={{ position: "absolute", bottom: 32, left: 32, color: "rgba(255,255,255,0.5)", fontSize: 12 }}>
-            Delhi Public School — Newtown, Kolkata
+          <div className="lp-brand-features">
+            {[
+              "Students, attendance & academics",
+              "Finance, fees & payroll",
+              "Parent communication & AI alerts",
+              "Reports & custom analytics",
+            ].map((f) => (
+              <div key={f} className="lp-brand-feature">
+                <span className="lp-check">✓</span>
+                {f}
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* ── RIGHT — Login form ── */}
+      {/* ── RIGHT ── */}
       <div className="lp-right">
-        <div className="lp-card">
+        <div className="lp-form-wrap">
 
-          {/* header */}
-          <div className="lp-card-logo">
-            <div className="lp-logo-mark" style={{ width: 40, height: 40, borderRadius: 10, fontSize: 16 }}>eS</div>
+          <div className="lp-form-header">
+            <h2 className="lp-title">Sign in</h2>
+            <p className="lp-sub">Enter your school credentials to continue</p>
           </div>
-          <h2 className="lp-card-title">Welcome back</h2>
-          <p className="lp-card-sub">Sign in to your school portal</p>
 
-          {/* demo pills */}
-          <div className="lp-demo-row">
-            {DEMO_CREDENTIALS.map((c) => (
-              <button key={c.id} className="lp-demo-pill" onClick={() => fillDemo(c)}
-                style={{ "--pill-color": c.color }}>
-                <span className="lp-demo-dot" style={{ background: c.color }}></span>
-                {c.label}
+          {/* Demo pills */}
+          <div className="lp-pills">
+            <span className="lp-pills-label">Try as:</span>
+            {DEMO.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                className="lp-pill"
+                style={{ "--c": d.color }}
+                onClick={() => { setLoginId(d.id); setPassword(d.pw); setError(""); }}
+              >
+                {d.label}
               </button>
             ))}
           </div>
 
           <form onSubmit={handleSubmit} noValidate>
 
-            {/* Login ID */}
             <div className="lp-field">
               <label className="lp-label">Login ID</label>
-              <div className="lp-input-wrap">
-                <span className="lp-input-icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-                    fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                  </svg>
-                </span>
-                <input
-                  type="text"
-                  className="lp-input"
-                  placeholder="e.g. ADMIN001"
-                  value={loginId}
-                  autoComplete="username"
-                  onChange={(e) => { setLoginId(e.target.value.toUpperCase()); setError(""); }}
-                />
-              </div>
+              <input
+                className="lp-input"
+                type="text"
+                placeholder="e.g. ADMIN001"
+                value={loginId}
+                autoComplete="username"
+                onChange={e => { setLoginId(e.target.value.toUpperCase()); setError(""); }}
+              />
             </div>
 
-            {/* Password */}
             <div className="lp-field">
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div className="lp-label-row">
                 <label className="lp-label">Password</label>
-                <span className="lp-forgot">Forgot password?</span>
+                <span className="lp-link">Forgot password?</span>
               </div>
-              <div className="lp-input-wrap">
-                <span className="lp-input-icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-                    fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
-                </span>
+              <div className="lp-pw-wrap">
                 <input
-                  type={showPw ? "text" : "password"}
                   className="lp-input"
+                  type={showPw ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}
                   autoComplete="current-password"
-                  onChange={(e) => { setPassword(e.target.value); setError(""); }}
+                  onChange={e => { setPassword(e.target.value); setError(""); }}
                 />
-                <button type="button" className="lp-eye" onClick={() => setShowPw((v) => !v)}>
+                <button type="button" className="lp-eye" onClick={() => setShowPw(v => !v)}>
                   {showPw ? <IconEyeOff /> : <IconEye />}
                 </button>
               </div>
             </div>
 
-            {/* Error */}
             {error && (
-              <div className="lp-error">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-                  fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                {error}
-              </div>
+              <div className="lp-error">{error}</div>
             )}
 
-            {/* Submit */}
-            <button type="submit" className={`lp-btn${loading ? " loading" : ""}`} disabled={loading}>
+            <button className={`lp-submit${loading ? " busy" : ""}`} disabled={loading}>
               {loading
-                ? <span className="lp-spinner"></span>
-                : <>Sign In <span style={{ marginLeft: 6 }}>→</span></>
+                ? <span className="lp-ring" />
+                : "Sign in"
               }
             </button>
 
           </form>
 
-          <p className="lp-footer">
-            Contact your school admin if you don't have login credentials.
-          </p>
+          <p className="lp-note">Contact your school administrator if you need access.</p>
+
         </div>
       </div>
 
