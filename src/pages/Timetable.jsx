@@ -1,78 +1,86 @@
-import Layout from "../components/Layout";
-
 export default function Timetable() {
-  return (
-    <Layout
-      title="Timetable"
-      subtitle="Class schedule"
-      action={<button className="btn primary">Edit Timetable</button>}
-    >
+  const periods = [
+    { time: "8:00–8:45", slots: [
+      { subject: "Physics", teacher: "R. Sharma", color: "" },
+      { subject: "Maths", teacher: "A. Bose", color: "green" },
+      { subject: "English", teacher: "V. Kumar", color: "purple" },
+      { subject: "Physics", teacher: "R. Sharma", color: "" },
+      { subject: "History", teacher: "S. Das", color: "amber" },
+      null,
+    ]},
+    { time: "8:45–9:30", slots: [
+      { subject: "Maths", teacher: "A. Bose", color: "green" },
+      { subject: "Chemistry", teacher: "P. Roy", color: "" },
+      { subject: "History", teacher: "S. Das", color: "amber" },
+      { subject: "Maths", teacher: "A. Bose", color: "green" },
+      { subject: "Physics", teacher: "R. Sharma", color: "" },
+      null,
+    ]},
+    { time: "9:30–9:45", isBreak: true },
+    { time: "9:45–10:30", slots: [
+      { subject: "English", teacher: "V. Kumar", color: "purple" },
+      { subject: "Geography", teacher: "M. Sen", color: "amber" },
+      { subject: "Biology", teacher: "K. Nair", color: "green" },
+      { subject: "English", teacher: "V. Kumar", color: "purple" },
+      { subject: "Biology", teacher: "K. Nair", color: "green" },
+      null,
+    ]},
+  ];
 
-      {/* ===== FILTER BAR ===== */}
+  return (
+    <>
       <div className="input-row">
-        <select className="input">
+        <select>
           <option>Class 10 — Section A</option>
           <option>Class 10 — Section B</option>
           <option>Class 8 — Section A</option>
         </select>
-
-        <select className="input">
+        <select>
           <option>Week of Apr 1–5</option>
           <option>Week of Mar 25–29</option>
         </select>
-
-        <div className="actions">
+        <div style={{ marginLeft: "auto" }}>
           <button className="btn primary">Edit Timetable</button>
         </div>
       </div>
 
-      {/* ===== TIMETABLE GRID ===== */}
       <div className="card">
-        <div className="tt-grid">
+        <div className="card-body" style={{ overflowX: "auto" }}>
+          <div className="tt-grid" style={{ minWidth: 680 }}>
+            {/* Headers */}
+            <div className="tt-cell header">Period</div>
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+              <div key={d} className="tt-cell header">{d}</div>
+            ))}
 
-          {/* HEADER */}
-          <div className="tt-cell header">Period</div>
-          <div className="tt-cell header">Mon</div>
-          <div className="tt-cell header">Tue</div>
-          <div className="tt-cell header">Wed</div>
-          <div className="tt-cell header">Thu</div>
-          <div className="tt-cell header">Fri</div>
-          <div className="tt-cell header">Sat</div>
-
-          {/* ROW 1 */}
-          <div className="tt-cell time">8:00–8:45</div>
-          <div className="tt-cell filled">Physics<br/><span>R. Sharma</span></div>
-          <div className="tt-cell filled green">Maths<br/><span>A. Bose</span></div>
-          <div className="tt-cell filled purple">English<br/><span>V. Kumar</span></div>
-          <div className="tt-cell filled">Physics<br/><span>R. Sharma</span></div>
-          <div className="tt-cell filled amber">History<br/><span>S. Das</span></div>
-          <div className="tt-cell">—</div>
-
-          {/* ROW 2 */}
-          <div className="tt-cell time">8:45–9:30</div>
-          <div className="tt-cell filled green">Maths<br/><span>A. Bose</span></div>
-          <div className="tt-cell filled">Chemistry<br/><span>P. Roy</span></div>
-          <div className="tt-cell filled amber">History<br/><span>S. Das</span></div>
-          <div className="tt-cell filled green">Maths<br/><span>A. Bose</span></div>
-          <div className="tt-cell filled">Physics<br/><span>R. Sharma</span></div>
-          <div className="tt-cell">—</div>
-
-          {/* BREAK */}
-          <div className="tt-cell time">9:30–9:45</div>
-          <div className="tt-cell break" style={{ gridColumn: "span 6" }}>☕ Break</div>
-
-          {/* ROW 3 */}
-          <div className="tt-cell time">9:45–10:30</div>
-          <div className="tt-cell filled purple">English<br/><span>V. Kumar</span></div>
-          <div className="tt-cell filled amber">Geography<br/><span>M. Sen</span></div>
-          <div className="tt-cell filled green">Biology<br/><span>K. Nair</span></div>
-          <div className="tt-cell filled purple">English<br/><span>V. Kumar</span></div>
-          <div className="tt-cell filled green">Biology<br/><span>K. Nair</span></div>
-          <div className="tt-cell">—</div>
-
+            {/* Rows */}
+            {periods.map((period, pi) => (
+              period.isBreak ? (
+                <div key={pi} style={{ display: "contents" }}>
+                  <div className="tt-cell tt-time">{period.time}</div>
+                  <div className="tt-cell span-6">☕ Break</div>
+                </div>
+              ) : (
+                <div key={pi} style={{ display: "contents" }}>
+                  <div className="tt-cell tt-time">{period.time}</div>
+                  {period.slots.map((slot, si) =>
+                    slot ? (
+                      <div key={si} className={`tt-cell filled${slot.color ? " " + slot.color : ""}`}>
+                        <div className="tt-subject">{slot.subject}</div>
+                        <div className="tt-teacher">{slot.teacher}</div>
+                      </div>
+                    ) : (
+                      <div key={si} className="tt-cell">
+                        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>—</div>
+                      </div>
+                    )
+                  )}
+                </div>
+              )
+            ))}
+          </div>
         </div>
       </div>
-
-    </Layout>
+    </>
   );
 }

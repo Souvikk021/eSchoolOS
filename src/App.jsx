@@ -1,27 +1,39 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AppProvider, useApp } from "./context/AppContext";
+import Layout from "./components/Layout";
+import Dashboard     from "./pages/Dashboard";
+import Students      from "./pages/Students";
+import Academics     from "./pages/Academics";
+import Attendance    from "./pages/Attendance";
+import Finance       from "./pages/Finance";
+import Communication from "./pages/Communication";
+import Reports       from "./pages/Reports";
+import Settings      from "./pages/Settings";
 
-import Dashboard from "./pages/Dashboard";
-import Students from "./pages/Students";
-import Attendance from "./pages/Attendance";
-import Fees from "./pages/Fees";
-import Teachers from "./pages/Teachers";
-import Timetable from "./pages/Timetable";
-import Classes from "./pages/Classes";
-import Reports from "./pages/Reports";
+const PANELS = {
+  dashboard:     Dashboard,
+  students:      Students,
+  academics:     Academics,
+  attendance:    Attendance,
+  finance:       Finance,
+  communication: Communication,
+  reports:       Reports,
+  settings:      Settings,
+};
+
+function AppContent() {
+  const { currentPanel } = useApp();
+  const PanelComponent = PANELS[currentPanel] || Dashboard;
+  return (
+    <Layout>
+      <PanelComponent />
+    </Layout>
+  );
+}
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/students" element={<Students />} />
-        <Route path="/attendance" element={<Attendance />} />
-        <Route path="/fees" element={<Fees />} />
-        <Route path="/teachers" element={<Teachers />} />
-        <Route path="/timetable" element={<Timetable />} />
-        <Route path="/classes" element={<Classes />} />
-        <Route path="/reports" element={<Reports />} />
-      </Routes>
-    </BrowserRouter>
+    <AppProvider>
+      <AppContent />
+    </AppProvider>
   );
 }
