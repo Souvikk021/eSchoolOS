@@ -2,12 +2,20 @@ import { createContext, useContext, useState } from "react";
 
 const AppContext = createContext(null);
 
+/* ─────────────────── MOCK CREDENTIAL STORE ─────────────────── */
+// In production: replace with Supabase / API call
+const USERS = {
+  ADMIN001:  { password: "admin123",     role: "admin",      name: "School Admin",  initials: "SA", school: "DPS Newtown" },
+  TCH001:    { password: "teacher123",   role: "teacher",    name: "Vijay Kumar",   initials: "VK", school: "DPS Newtown" },
+  STU001:    { password: "student123",   role: "student",    name: "Aarav Roy",     initials: "AR", school: "DPS Newtown" },
+  ACC001:    { password: "account123",   role: "accountant", name: "Sunita Rao",    initials: "SR", school: "DPS Newtown" },
+};
+
+/* ─────────────────── ROLES ─────────────────── */
 export const ROLES = {
   admin: {
     label: "Admin",
     color: "#0066ff",
-    name: "School Admin",
-    initials: "SA",
     school: "DPS Newtown",
     nav: [
       {
@@ -46,8 +54,6 @@ export const ROLES = {
   teacher: {
     label: "Teacher",
     color: "#10b981",
-    name: "Vijay Kumar",
-    initials: "VK",
     school: "DPS Newtown",
     nav: [
       {
@@ -73,8 +79,6 @@ export const ROLES = {
   student: {
     label: "Student",
     color: "#f59e0b",
-    name: "Aarav Roy",
-    initials: "AR",
     school: "DPS Newtown",
     nav: [
       {
@@ -97,8 +101,6 @@ export const ROLES = {
   accountant: {
     label: "Accountant",
     color: "#8b5cf6",
-    name: "Sunita Rao",
-    initials: "SR",
     school: "DPS Newtown",
     nav: [
       {
@@ -118,20 +120,48 @@ export const PAGE_META = {
   students:      { title: "Students",      sub: "Manage student roster",  primary: "+ Add Student",   secondary: "↑ Import" },
   academics:     { title: "Academics",     sub: "Classes, timetable & curriculum" },
   attendance:    { title: "Attendance",    sub: "Track daily presence" },
-  finance:       { title: "Finance",       sub: "Fees, payroll & expenses",       primary: "Collect Fee" },
+  finance:       { title: "Finance",       sub: "Fees, payroll & expenses", primary: "Collect Fee" },
   communication: { title: "Communication", sub: "Announcements & messaging" },
   reports:       { title: "Reports",       sub: "Analytics & insights",   secondary: "↓ Export" },
   settings:      { title: "Settings",      sub: "School configuration" },
 };
 
+/* ─────────────────── PROVIDER ─────────────────── */
 export function AppProvider({ children }) {
-  const [currentRole, setCurrentRole] = useState("admin");
-  const [currentPanel, setCurrentPanel] = useState("dashboard");
+  // Auth
+  const [isLoggedIn,   setIsLoggedIn]   = useState(false);
+  const [currentRole,  setCurrentRole]  = useState("admin");
+  const [currentUser,  setCurrentUser]  = useState(null);   // { name, initials, school }
+
+  // Navigation
+  const [currentPanel,     setCurrentPanel]     = useState("dashboard");
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
 
-  const role = ROLES[currentRole];
-  const allPanelIds = role.nav.flatMap((s) => s.items.map((i) => i.id));
+  const roleData   = ROLES[currentRole];
+  const allPanelIds = roleData.nav.flatMap((s) => s.items.map((i) => i.id));
 
+  /* — Auth — */
+  function login(loginId, password) {
+    const user = USERS[loginId.trim().toUpperCase()];
+    if (!user)                        return { success: false, error: "Invalid Login ID." };
+    if (user.password !== password)   return { success: false, error: "Incorrect password." };
+
+    setCurrentRole(user.role);
+    setCurrentUser({ name: user.name, initials: user.initials, school: user.school });
+    setCurrentPanel(ROLES[user.role].nav[0].items[0].id);
+    setIsLoggedIn(true);
+    return { success: true };
+  }
+
+  function logout() {
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    setCurrentRole("admin");
+    setCurrentPanel("dashboard");
+    setRoleSwitcherOpen(false);
+  }
+
+  /* — Navigation — */
   function navigate(panelId) {
     if (!allPanelIds.includes(panelId)) return;
     setCurrentPanel(panelId);
@@ -139,8 +169,7 @@ export function AppProvider({ children }) {
 
   function switchRole(roleKey) {
     setCurrentRole(roleKey);
-    const firstPanel = ROLES[roleKey].nav[0].items[0].id;
-    setCurrentPanel(firstPanel);
+    setCurrentPanel(ROLES[roleKey].nav[0].items[0].id);
     setRoleSwitcherOpen(false);
   }
 
@@ -151,10 +180,16 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider
       value={{
+        // auth
+        isLoggedIn,
+        currentUser,
+        login,
+        logout,
+        // nav
         currentRole,
         currentPanel,
         roleSwitcherOpen,
-        role,
+        role: { ...roleData, ...currentUser },   // merge user's real name/initials into role
         allPanelIds,
         navigate,
         switchRole,

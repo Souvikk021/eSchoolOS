@@ -1,5 +1,6 @@
 import { AppProvider, useApp } from "./context/AppContext";
-import Layout from "./components/Layout";
+import Layout        from "./components/Layout";
+import Login         from "./pages/Login";
 import Dashboard     from "./pages/Dashboard";
 import Students      from "./pages/Students";
 import Academics     from "./pages/Academics";
@@ -21,7 +22,10 @@ const PANELS = {
 };
 
 function AppContent() {
-  const { currentPanel } = useApp();
+  const { isLoggedIn, currentPanel } = useApp();
+
+  if (!isLoggedIn) return <Login />;
+
   const PanelComponent = PANELS[currentPanel] || Dashboard;
   return (
     <Layout>
