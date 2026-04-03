@@ -22,10 +22,10 @@ function IconEyeOff() {
 }
 
 const DEMO = [
-  { id: "ADMIN001", pw: "admin123",   label: "Admin",      color: "#2563eb" },
-  { id: "TCH001",   pw: "teacher123", label: "Teacher",    color: "#059669" },
-  { id: "STU001",   pw: "student123", label: "Student",    color: "#d97706" },
-  { id: "ACC001",   pw: "account123", label: "Accountant", color: "#7c3aed" },
+  { id: "ADMIN001", pw: "admin123",   label: "Admin",       color: "#2563eb" },
+  { id: "TCH001",   pw: "teacher123", label: "Teacher",     color: "#059669" },
+  { id: "STU001",   pw: "student123", label: "Student",     color: "#d97706" },
+  { id: "ACC001",   pw: "account123", label: "Accountant",  color: "#7c3aed" },
 ];
 
 export default function Login() {
@@ -41,12 +41,14 @@ export default function Login() {
     e.preventDefault();
     setError("");
     if (!loginId.trim()) { setError("Please enter your Login ID."); return; }
-    if (!password)        { setError("Please enter your password."); return; }
+    if (!password)       { setError("Please enter your password.");  return; }
+
     setLoading(true);
-    await new Promise(r => setTimeout(r, 500));
-    const res = login(loginId, password);
+    const res = await login(loginId, password);
     setLoading(false);
+
     if (!res.success) setError(res.error);
+    // On success: AppContext sets isLoggedIn = true → App.jsx re-renders automatically
   }
 
   return (
@@ -137,14 +139,18 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="lp-error">{error}</div>
+              <div className="lp-error">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                {error}
+              </div>
             )}
 
-            <button className={`lp-submit${loading ? " busy" : ""}`} disabled={loading}>
-              {loading
-                ? <span className="lp-ring" />
-                : "Sign in"
-              }
+            <button className={`lp-submit${loading ? " busy" : ""}`} type="submit" disabled={loading}>
+              {loading ? <span className="lp-ring" /> : "Sign in"}
             </button>
 
           </form>
