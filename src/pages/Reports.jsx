@@ -1,275 +1,253 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
+import Topbar from "../components/Topbar";
 
-function AcademicReportsTab() {
+export default function Reports() {
+  const { currentUser, currentRole } = useApp();
+  const [activeTab, setActiveTab] = useState("attendance");
+  const [stats, setStats] = useState({});
+  const [attData, setAttData] = useState([]);
+  const [feeData, setFeeData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    async function load() {
+      const sid = currentUser.school_id;
+
+      const [
+        { count: studentCount },
+        { count: teacherCount },
+        attRes,
+        feeRes,
+      ] = await Promise.all([
+        supabase.from("students").select("*", { count: "exact", head: true }).eq("school_id", sid),
+        supabase.from("teachers").select("*", { count: "exact", head: true }).eq("school_id", sid),
+        supabase.from("attendance").select("school_id, status, class_id, classes(name)").eq("school_id", sid),
+        supabase.from("fees").select("amount, status, student_id, students(full_name, classes(name))").eq("school_id", sid),
+      ]);
+
+      const att = attRes.data || [];
+      const fees = feeRes.data || [];
+      const totalPresent = att.filter(a => a.status === "present").length;
+      const totalAtt = att.length;
+      const totalFees = fees.filter(f => f.status === "paid").reduce((s, f) => s + f.amount, 0);
+      const pendingFees = fees.filter(f => f.status === "pending").reduce((s, f) => s + f.amount, 0);
+
+      setStats({
+        students: studentCount || 0,
+        teachers: teacherCount || 0,
+        attRate: totalAtt ? Math.round((totalPresent / totalAtt) * 100) : 0,
+        totalPresent,
+        totalAtt,
+        collectedFees: totalFees,
+        pendingFees,
+        feeCount: fees.length,
+      });
+
+      // Class-wise attendance summary
+      const classMap = {};
+      att.forEach(a => {
+        const cls = a.classes?.name || "Unknown";
+        if (!classMap[cls]) classMap[cls] = { present: 0, absent: 0, total: 0 };
+        classMap[cls].total++;
+        if (a.status === "present") classMap[cls].present++;
+        else if (a.status === "absent") classMap[cls].absent++;
+      });
+      setAttData(Object.entries(classMap).map(([name, v]) => ({ name, ...v, rate: v.total ? Math.round((v.present / v.total) * 100) : 0 })).sort((a, b) => b.rate - a.rate));
+
+      // Fee summary per student
+      const studentFeeMap = {};
+      fees.forEach(f => {
+        const name = f.students?.full_name || "Unknown";
+        const cls = f.students?.classes?.name || "—";
+        if (!studentFeeMap[name]) studentFeeMap[name] = { name, cls, paid: 0, pending: 0 };
+        if (f.status === "paid") studentFeeMap[name].paid += f.amount;
+        else if (f.status === "pending") studentFeeMap[name].pending += f.amount;
+      });
+      const defaulters = Object.values(studentFeeMap).filter(s => s.pending > 0).sort((a, b) => b.pending - a.pending).slice(0, 5);
+      setFeeData(defaulters);
+
+      setLoading(false);
+    }
+    load();
+  }, [currentUser]);
+
+  const TABS = [
+    { id: "attendance", label: "Attendance Reports" },
+    { id: "financial", label: "Financial Reports" },
+    { id: "overview", label: "Overview" },
+  ];
+
   return (
     <>
-      <div className="stats-row" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
-        {[
-          { label: "Pass Rate",       value: "94.8%", sub: "This Term",       color: "#10b981", change: "up", ct: "↑ 2.3% vs last term" },
-          { label: "Top Performer",   value: "98.6%", sub: "Aarav Roy · 10-A",color: "#0066ff", change: "",   ct: "Highest scorer" },
-          { label: "Avg Score",       value: "76.4",  sub: "Out of 100",      color: "#8b5cf6", change: "up", ct: "↑ 4.1 pts vs last term" },
-          { label: "Improvement",     value: "312",   sub: "Students",        color: "#f59e0b", change: "up", ct: "↑ Score improved" },
-        ].map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-label"><span className="dot" style={{ background: s.color }}></span>{s.label}</div>
-            <div className="stat-value" style={{ fontSize: 22 }}>{s.value}</div>
-            <div className={`stat-change ${s.change}`}>{s.ct}</div>
-          </div>
-        ))}
-      </div>
-      <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-header">
-          <div><div className="card-title">Class-wise Performance</div><div className="card-sub">Current Term</div></div>
-          <button className="btn sm">↓ Export PDF</button>
+      <Topbar title="Reports" sub="Analytics & insights" />
+      <div style={{ padding: "24px 28px" }}>
+        {/* Summary stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
+          {[
+            { label: "Total Students", value: stats.students, color: "#0066ff" },
+            { label: "Teachers", value: stats.teachers, color: "#10b981" },
+            { label: "Avg Attendance", value: (stats.attRate || 0) + "%", color: "#8b5cf6" },
+            { label: "Fees Collected", value: "₹" + ((stats.collectedFees || 0) / 1000).toFixed(1) + "k", color: "#f59e0b" },
+          ].map(s => (
+            <div key={s.label} style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: 20, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color, display: "inline-block" }} />
+                <span style={{ fontSize: 12, color: "#9ca3af", fontWeight: 500 }}>{s.label}</span>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.8px", lineHeight: 1 }}>{loading ? "—" : s.value}</div>
+            </div>
+          ))}
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Class</th><th>Students</th><th>Avg %</th><th>Pass Rate</th><th>Toppers</th><th>Performance</th></tr></thead>
-            <tbody>
-              {[
-                { cls: "Class 12-A", students: 34, avg: 82, pass: 100, topper: "A. Roy" },
-                { cls: "Class 11-A", students: 38, avg: 76, pass: 97,  topper: "P. Sen" },
-                { cls: "Class 10-A", students: 38, avg: 79, pass: 100, topper: "R. Gupta" },
-                { cls: "Class 9-C",  students: 36, avg: 71, pass: 94,  topper: "N. Das" },
-                { cls: "Class 8-B",  students: 40, avg: 68, pass: 90,  topper: "J. Kumar" },
-              ].map((r) => {
-                const col = r.pass >= 98 ? "var(--green)" : r.pass >= 90 ? "var(--amber)" : "var(--red)";
-                const badge = r.pass >= 98 ? "green" : r.pass >= 90 ? "amber" : "red";
-                return (
-                  <tr key={r.cls}>
-                    <td style={{ fontWeight: 500 }}>{r.cls}</td>
-                    <td>{r.students}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div className="progress-bar" style={{ width: 60 }}>
-                          <div className="progress-fill" style={{ width: `${r.avg}%`, background: "var(--accent)" }}></div>
-                        </div>
-                        <span className="mono" style={{ fontSize: 12 }}>{r.avg}%</span>
-                      </div>
-                    </td>
-                    <td><span className={`badge ${badge}`}>{r.pass}%</span></td>
-                    <td style={{ color: "var(--text-secondary)" }}>{r.topper}</td>
-                    <td><button className="btn ghost sm">Detail</button></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  );
-}
 
-function AttendanceReportsTab() {
-  return (
-    <>
-      <div className="stats-row" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
-        {[
-          { label: "Avg Attendance",  value: "94.2%", sub: "This Month",    color: "#10b981", ct: "↑ 1.8% vs last month", change: "up" },
-          { label: "Perfect Attendance", value: "248", sub: "Students",    color: "#0066ff", ct: "No absences this term",  change: "" },
-          { label: "Chronic Absent",  value: "8",     sub: "< 75%",        color: "#ef4444", ct: "↑ 2 new this week",     change: "down" },
-        ].map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-label"><span className="dot" style={{ background: s.color }}></span>{s.label}</div>
-            <div className="stat-value" style={{ fontSize: 22 }}>{s.value}</div>
-            <div className={`stat-change ${s.change}`}>{s.ct}</div>
-          </div>
-        ))}
-      </div>
-      <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-header">
-          <div><div className="card-title">Class-wise Attendance</div><div className="card-sub">April 2026</div></div>
-          <button className="btn sm">↓ Export CSV</button>
+        {/* Tab bar */}
+        <div style={{ display: "flex", gap: 2, borderBottom: "1px solid #e8eaed", marginBottom: 20 }}>
+          {TABS.map(t => (
+            <div key={t.id} onClick={() => setActiveTab(t.id)} style={{
+              padding: "10px 16px", fontSize: 13.5, fontWeight: 500, cursor: "pointer",
+              borderBottom: activeTab === t.id ? "2px solid #0066ff" : "2px solid transparent",
+              marginBottom: -1, color: activeTab === t.id ? "#0066ff" : "#9ca3af",
+            }}>{t.label}</div>
+          ))}
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Class</th><th>Total</th><th>Avg Present</th><th>Avg Absent</th><th>Rate</th><th></th></tr></thead>
-            <tbody>
-              {[
-                { cls: "Class 12-A", total: 34, pres: 33, abs: 1,  rate: 97 },
-                { cls: "Class 10-A", total: 38, pres: 36, abs: 2,  rate: 94 },
-                { cls: "Class 11-A", total: 38, pres: 35, abs: 3,  rate: 92 },
-                { cls: "Class 9-C",  total: 36, pres: 32, abs: 4,  rate: 89 },
-                { cls: "Class 8-B",  total: 40, pres: 35, abs: 5,  rate: 87 },
-              ].map((r) => {
-                const col = r.rate >= 90 ? "var(--green)" : r.rate >= 80 ? "var(--amber)" : "var(--red)";
-                const badge = r.rate >= 90 ? "green" : r.rate >= 80 ? "amber" : "red";
-                return (
-                  <tr key={r.cls}>
-                    <td style={{ fontWeight: 500 }}>{r.cls}</td>
-                    <td>{r.total}</td>
-                    <td>{r.pres}</td>
-                    <td style={{ color: "var(--red)" }}>{r.abs}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div className="progress-bar" style={{ width: 80 }}>
-                          <div className="progress-fill" style={{ width: `${r.rate}%`, background: col }}></div>
-                        </div>
-                        <span className="mono" style={{ fontSize: 12 }}>{r.rate}%</span>
-                      </div>
-                    </td>
-                    <td><button className="btn ghost sm">Detail</button></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  );
-}
 
-function FinancialReportsTab() {
-  return (
-    <>
-      <div className="stats-row" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
-        {[
-          { label: "Total Revenue",  value: "₹48.2L", color: "#0066ff", change: "up", ct: "↑ 8% vs last year" },
-          { label: "Fee Collection", value: "92.3%",  color: "#10b981", change: "up", ct: "₹4.8L collected" },
-          { label: "Expenditure",    value: "₹8.4L",  color: "#f59e0b", change: "",   ct: "Operating costs" },
-          { label: "Net Surplus",    value: "₹39.8L", color: "#8b5cf6", change: "up", ct: "↑ 12% vs last year" },
-        ].map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-label"><span className="dot" style={{ background: s.color }}></span>{s.label}</div>
-            <div className="stat-value" style={{ fontSize: 22 }}>{s.value}</div>
-            <div className={`stat-change ${s.change}`}>{s.ct}</div>
-          </div>
-        ))}
-      </div>
-      <div className="grid-2" style={{ marginTop: 20 }}>
-        <div className="card">
-          <div className="card-header">
-            <div><div className="card-title">Monthly Collection</div><div className="card-sub">FY 2025–26</div></div>
-          </div>
-          <div className="card-body">
-            {[
-              { month: "January",  amt: 420000, target: 500000 },
-              { month: "February", amt: 465000, target: 500000 },
-              { month: "March",    amt: 490000, target: 500000 },
-              { month: "April",    amt: 480000, target: 520000 },
-            ].map((m) => {
-              const pct = Math.round((m.amt / m.target) * 100);
-              const col = pct >= 90 ? "var(--green)" : "var(--amber)";
-              return (
-                <div key={m.month} style={{ marginBottom: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
-                    <span style={{ fontWeight: 500 }}>{m.month}</span>
-                    <span className="mono" style={{ fontSize: 12 }}>₹{(m.amt/100000).toFixed(1)}L / ₹{(m.target/100000).toFixed(1)}L</span>
-                  </div>
-                  <div className="progress-bar">
-                    <div className="progress-fill" style={{ width: `${pct}%`, background: col }}></div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">Top Fee Defaulters</div>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Student</th><th>Class</th><th>Due</th><th>Days</th></tr></thead>
+        {/* Attendance tab */}
+        {activeTab === "attendance" && (
+          <div style={C.card}>
+            <div style={C.header}>
+              <div>
+                <div style={C.title}>Class-wise Attendance Summary</div>
+                <div style={C.sub}>Based on all recorded attendance data</div>
+              </div>
+            </div>
+            <table style={T.table}>
+              <thead><tr>{["Class", "Total Records", "Present", "Absent", "Rate"].map(h => <th key={h} style={T.th}>{h}</th>)}</tr></thead>
               <tbody>
-                {[
-                  { name: "Priya Mehta",  cls: "8-B",  due: "₹10,000", days: 45 },
-                  { name: "Jatin Kumar",  cls: "10-A", due: "₹7,500",  days: 32 },
-                  { name: "Sourav Khan",  cls: "12-C", due: "₹8,000",  days: 38 },
-                ].map((d, i) => (
-                  <tr key={i}>
-                    <td style={{ fontWeight: 500 }}>{d.name}</td>
-                    <td>{d.cls}</td>
-                    <td className="mono" style={{ color: "var(--red)", fontWeight: 600, fontSize: 13 }}>{d.due}</td>
-                    <td><span className="badge red">{d.days}d</span></td>
-                  </tr>
-                ))}
+                {loading ? <tr><td colSpan={5} style={T.td}>Loading…</td></tr>
+                  : attData.length === 0 ? <tr><td colSpan={5} style={{ ...T.td, textAlign: "center", color: "#9ca3af" }}>No attendance data found</td></tr>
+                    : attData.map((r, i) => {
+                      const color = r.rate >= 90 ? "#059669" : r.rate >= 75 ? "#d97706" : "#dc2626";
+                      const bg = r.rate >= 90 ? "#ecfdf5" : r.rate >= 75 ? "#fffbeb" : "#fef2f2";
+                      return (
+                        <tr key={i}>
+                          <td style={{ ...T.td, fontWeight: 500 }}>{r.name}</td>
+                          <td style={T.td}>{r.total}</td>
+                          <td style={{ ...T.td, color: "#059669", fontWeight: 500 }}>{r.present}</td>
+                          <td style={{ ...T.td, color: "#dc2626" }}>{r.absent}</td>
+                          <td style={T.td}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ background: "#f0f2f5", borderRadius: 4, height: 6, width: 80, overflow: "hidden" }}>
+                                <div style={{ background: color, height: "100%", width: `${r.rate}%` }} />
+                              </div>
+                              <span style={{ background: bg, color, fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20 }}>{r.rate}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </>
-  );
-}
+        )}
 
-function CustomAnalyticsTab() {
-  return (
-    <>
-      <div style={{ marginBottom: 20, padding: "16px 20px", background: "var(--accent-light)", border: "1px solid #c7d9ff", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", gap: 16 }}>
-        <div style={{ fontSize: 28 }}>📊</div>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 14, color: "var(--accent)" }}>Custom Analytics Builder</div>
-          <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>Build your own reports using any combination of metrics, date ranges, and filters.</div>
-        </div>
-        <button className="btn primary" style={{ marginLeft: "auto" }}>Build Report</button>
-      </div>
-      <div className="grid-2">
-        <div className="card">
-          <div className="card-header"><div className="card-title">Metric</div></div>
-          <div className="card-body">
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {["Attendance Rate", "Fee Collection %", "Academic Performance", "Teacher Punctuality", "Assignment Completion"].map((m) => (
-                <label key={m} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
-                  <input type="checkbox" defaultChecked={m.includes("Attendance") || m.includes("Fee")} />
-                  {m}
-                </label>
-              ))}
+        {/* Financial tab */}
+        {activeTab === "financial" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            {/* Summary */}
+            <div style={C.card}>
+              <div style={C.header}><div style={C.title}>Fee Summary</div></div>
+              <div style={{ padding: "16px 20px" }}>
+                {[
+                  { label: "Total Collected", value: "₹" + ((stats.collectedFees || 0) / 1000).toFixed(1) + "k", color: "#059669" },
+                  { label: "Pending Amount", value: "₹" + ((stats.pendingFees || 0) / 1000).toFixed(1) + "k", color: "#dc2626" },
+                  { label: "Total Transactions", value: stats.feeCount || 0, color: "#0066ff" },
+                  { label: "Collection Rate", value: stats.feeCount ? Math.round((stats.collectedFees / (stats.collectedFees + stats.pendingFees)) * 100) + "%" : "—", color: "#8b5cf6" },
+                ].map(s => (
+                  <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f0f2f5" }}>
+                    <span style={{ fontSize: 13, color: "#6b7280" }}>{s.label}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: s.color }}>{loading ? "—" : s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Top defaulters */}
+            <div style={C.card}>
+              <div style={C.header}><div style={C.title}>Top Fee Defaulters</div></div>
+              <table style={T.table}>
+                <thead><tr>{["Student", "Class", "Pending"].map(h => <th key={h} style={T.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {loading ? <tr><td colSpan={3} style={T.td}>Loading…</td></tr>
+                    : feeData.length === 0 ? <tr><td colSpan={3} style={{ ...T.td, textAlign: "center", color: "#9ca3af" }}>No pending fees</td></tr>
+                      : feeData.map((d, i) => (
+                        <tr key={i}>
+                          <td style={{ ...T.td, fontWeight: 500 }}>{d.name}</td>
+                          <td style={T.td}>{d.cls}</td>
+                          <td style={{ ...T.td, fontFamily: "monospace", color: "#dc2626", fontWeight: 600 }}>₹{d.pending.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
-        <div className="card">
-          <div className="card-header"><div className="card-title">Dimensions & Filters</div></div>
-          <div className="card-body">
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 5, display: "block" }}>Group By</label>
-                <select style={{ width: "100%" }}><option>Class</option><option>Section</option><option>Student</option><option>Teacher</option></select>
+        )}
+
+        {/* Overview tab */}
+        {activeTab === "overview" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            <div style={C.card}>
+              <div style={C.header}><div style={C.title}>School Summary</div></div>
+              <div style={{ padding: "16px 20px" }}>
+                {[
+                  { label: "Total Students", value: stats.students },
+                  { label: "Total Teachers", value: stats.teachers },
+                  { label: "Attendance Records", value: stats.totalAtt },
+                  { label: "Fee Transactions", value: stats.feeCount },
+                  { label: "Today's Date", value: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) },
+                ].map(s => (
+                  <div key={s.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f0f2f5" }}>
+                    <span style={{ fontSize: 13, color: "#6b7280" }}>{s.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{loading && typeof s.value === "number" ? "—" : s.value}</span>
+                  </div>
+                ))}
               </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 5, display: "block" }}>Date Range</label>
-                <select style={{ width: "100%" }}><option>This Month</option><option>Last 3 Months</option><option>This Academic Year</option><option>Custom...</option></select>
+            </div>
+            <div style={C.card}>
+              <div style={C.header}><div style={C.title}>Attendance Overview</div></div>
+              <div style={{ padding: "20px" }}>
+                <div style={{ textAlign: "center", marginBottom: 20 }}>
+                  <div style={{ fontSize: 48, fontWeight: 700, color: stats.attRate >= 80 ? "#059669" : "#dc2626" }}>{stats.attRate || 0}%</div>
+                  <div style={{ fontSize: 13, color: "#9ca3af" }}>Overall attendance rate</div>
+                </div>
+                <div style={{ display: "flex", gap: 12 }}>
+                  {[
+                    { label: "Present", value: stats.totalPresent || 0, color: "#059669", bg: "#ecfdf5" },
+                    { label: "Total", value: stats.totalAtt || 0, color: "#0066ff", bg: "#eff4ff" },
+                  ].map(s => (
+                    <div key={s.label} style={{ flex: 1, background: s.bg, borderRadius: 10, padding: "12px", textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{loading ? "—" : s.value}</div>
+                      <div style={{ fontSize: 11, color: s.color, fontWeight: 500 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 5, display: "block" }}>Output Format</label>
-                <select style={{ width: "100%" }}><option>Table</option><option>Export CSV</option><option>Export PDF</option></select>
-              </div>
-              <button className="btn primary full">Generate Report</button>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </>
   );
 }
 
-const TABS = [
-  { id: "academic",    label: "Academic Reports" },
-  { id: "attendance",  label: "Attendance Reports" },
-  { id: "financial",   label: "Financial Reports" },
-  { id: "analytics",   label: "Custom Analytics" },
-];
-
-export default function Reports() {
-  const [activeTab, setActiveTab] = useState("academic");
-  const views = {
-    academic:   <AcademicReportsTab />,
-    attendance: <AttendanceReportsTab />,
-    financial:  <FinancialReportsTab />,
-    analytics:  <CustomAnalyticsTab />,
-  };
-  return (
-    <>
-      <div className="tab-row">
-        {TABS.map((t) => (
-          <div key={t.id} className={`tab${activeTab === t.id ? " active" : ""}`} onClick={() => setActiveTab(t.id)}>
-            {t.label}
-          </div>
-        ))}
-      </div>
-      {views[activeTab]}
-    </>
-  );
-}
+const C = {
+  card: { background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" },
+  header: { padding: "14px 20px", borderBottom: "1px solid #f0f2f5", display: "flex", alignItems: "center", justifyContent: "space-between" },
+  title: { fontSize: 14, fontWeight: 600 },
+  sub: { fontSize: 12, color: "#9ca3af", marginTop: 2 },
+};
+const T = {
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: { textAlign: "left", fontSize: 11, fontWeight: 600, color: "#9ca3af", letterSpacing: "0.5px", textTransform: "uppercase", padding: "10px 16px", borderBottom: "1px solid #e8eaed", whiteSpace: "nowrap" },
+  td: { padding: "12px 16px", fontSize: 13.5, borderBottom: "1px solid #f0f2f5", color: "#0f1117" },
+};

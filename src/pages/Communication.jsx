@@ -1,67 +1,7 @@
-import { useState } from "react";
-
-const ANNOUNCEMENTS = [
-  {
-    id: 1,
-    type: "announcement",
-    from: "Principal",
-    initials: "PR",
-    color: "linear-gradient(135deg,#0066ff,#6366f1)",
-    title: "Annual Sports Day — 15 April",
-    body: "All students and staff are invited to the Annual Sports Day on 15th April 2026 at the school grounds. Events begin at 9:00 AM. Parents are welcome.",
-    time: "2h ago",
-    audience: "All",
-    pinned: true,
-  },
-  {
-    id: 2,
-    type: "message",
-    from: "Priya Mehta's Parent",
-    initials: "PM",
-    color: "linear-gradient(135deg,#f59e0b,#ef4444)",
-    title: "Absence notification",
-    body: "Priya will be absent on 4th April due to a family function. Kindly note and excuse her from attendance.",
-    time: "4h ago",
-    audience: "Admin",
-    pinned: false,
-  },
-  {
-    id: 3,
-    type: "alert",
-    from: "System",
-    initials: "eS",
-    color: "linear-gradient(135deg,#ef4444,#f59e0b)",
-    title: "Fee reminder sent to 38 parents",
-    body: "Automated SMS & email reminders have been dispatched to parents of students with outstanding fees for April 2026.",
-    time: "Yesterday",
-    audience: "Finance",
-    pinned: false,
-  },
-  {
-    id: 4,
-    type: "announcement",
-    from: "Class Teacher — 10-A",
-    initials: "CT",
-    color: "linear-gradient(135deg,#10b981,#06b6d4)",
-    title: "Parent-Teacher Meeting — 10 April",
-    body: "PTM for Class 10-A is scheduled on 10th April from 10 AM to 1 PM. All parents are requested to attend. Slot booking is now open.",
-    time: "Yesterday",
-    audience: "Class 10-A",
-    pinned: false,
-  },
-  {
-    id: 5,
-    type: "message",
-    from: "Karan Sharma",
-    initials: "KS",
-    color: "linear-gradient(135deg,#10b981,#059669)",
-    title: "Request for TC",
-    body: "I would like to request a Transfer Certificate as my family is relocating to Bangalore by end of April. Please advise on the process.",
-    time: "2 days ago",
-    audience: "Admin",
-    pinned: false,
-  },
-];
+import { useEffect, useState } from "react";
+import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
+import Topbar from "../components/Topbar";
 
 const TYPE_META = {
   announcement: { label: "Announcement", color: "#2563eb", bg: "#eff6ff" },
@@ -70,227 +10,220 @@ const TYPE_META = {
 };
 
 export default function Communication() {
-  const [filter,   setFilter]  = useState("all");
-  const [compose,  setCompose]  = useState(false);
+  const { currentUser, currentRole } = useApp();
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
-  const [subject,  setSubject]  = useState("");
-  const [body,     setBody]     = useState("");
-  const [sent,     setSent]     = useState(false);
+  const [compose, setCompose] = useState(false);
+  const [form, setForm] = useState({ title: "", body: "", audience: "All", type: "announcement" });
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const items = filter === "all"
-    ? ANNOUNCEMENTS
-    : ANNOUNCEMENTS.filter(a => a.type === filter);
+  const canCompose = ["admin", "superadmin", "teacher"].includes(currentRole);
 
-  function handleSend(e) {
-    e.preventDefault();
-    setSent(true);
-    setTimeout(() => { setCompose(false); setSent(false); setSubject(""); setBody(""); }, 1500);
+  async function fetchAnnouncements() {
+    if (!currentUser) return;
+    const { data } = await supabase
+      .from("announcements")
+      .select("*")
+      .eq("school_id", currentUser.school_id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setAnnouncements(data || []);
+    setLoading(false);
   }
 
-  const active = selected !== null ? ANNOUNCEMENTS.find(a => a.id === selected) : items[0];
+  useEffect(() => { fetchAnnouncements(); }, [currentUser]);
+
+  async function handleSend(e) {
+    e.preventDefault();
+    if (!form.title || !form.body) return;
+    setSending(true);
+    await supabase.from("announcements").insert([{
+      school_id: currentUser.school_id,
+      created_by: currentUser.id,
+      title: form.title,
+      body: form.body,
+      audience: form.audience,
+      type: form.type,
+    }]);
+    setSending(false);
+    setSent(true);
+    setForm({ title: "", body: "", audience: "All", type: "announcement" });
+    fetchAnnouncements();
+    setTimeout(() => { setCompose(false); setSent(false); }, 1500);
+  }
+
+  const items = filter === "all" ? announcements : announcements.filter(a => a.type === filter);
+  const active = selected !== null
+    ? announcements.find(a => a.id === selected)
+    : items[0] || null;
+
+  const statCounts = {
+    announcement: announcements.filter(a => a.type === "announcement").length,
+    message: announcements.filter(a => a.type === "message").length,
+    alert: announcements.filter(a => a.type === "alert").length,
+  };
 
   return (
     <>
-      {/* ── STATS ── */}
-      <div className="stats-row">
-        <div className="stat-card">
-          <div className="stat-label"><span className="dot" style={{ background: "#0066ff" }} />Announcements</div>
-          <div className="stat-value">{ANNOUNCEMENTS.filter(a => a.type === "announcement").length}</div>
-          <div className="stat-change up">this month</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label"><span className="dot" style={{ background: "#10b981" }} />Messages</div>
-          <div className="stat-value">{ANNOUNCEMENTS.filter(a => a.type === "message").length}</div>
-          <div className="stat-change" style={{ color: "var(--text-muted)" }}>unread</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label"><span className="dot" style={{ background: "#f59e0b" }} />Alerts</div>
-          <div className="stat-value">{ANNOUNCEMENTS.filter(a => a.type === "alert").length}</div>
-          <div className="stat-change down">needs action</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label"><span className="dot" style={{ background: "#8b5cf6" }} />Parents Reached</div>
-          <div className="stat-value">284</div>
-          <div className="stat-change up">this week</div>
-        </div>
-      </div>
+      <Topbar
+        title="Communication"
+        sub="Announcements & messaging"
+        actions={canCompose ? (
+          <button style={BtnS.primary} onClick={() => setCompose(true)}>+ New Announcement</button>
+        ) : null}
+      />
 
-      {/* ── COMPOSE MODAL ── */}
-      {compose && (
-        <div style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 50,
-          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
-        }}>
-          <div style={{
-            background: "#fff", borderRadius: 16, width: "100%", maxWidth: 520,
-            padding: "28px 32px", boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>New Announcement</div>
-              <button onClick={() => setCompose(false)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--text-muted)" }}>✕</button>
+      <div style={{ padding: "24px 28px" }}>
+        {/* Stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 24 }}>
+          {[
+            { label: "Announcements", value: statCounts.announcement, color: "#0066ff" },
+            { label: "Messages", value: statCounts.message, color: "#10b981" },
+            { label: "Alerts", value: statCounts.alert, color: "#f59e0b" },
+          ].map(s => (
+            <div key={s.label} style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: 20, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color, display: "inline-block" }} />
+                <span style={{ fontSize: 12, color: "#9ca3af", fontWeight: 500 }}>{s.label}</span>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.8px", lineHeight: 1 }}>{s.value}</div>
             </div>
-            <form onSubmit={handleSend} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 5 }}>Audience</label>
-                <select style={{
-                  width: "100%", height: 36, border: "1px solid var(--border)", borderRadius: 7,
-                  padding: "0 10px", fontSize: 13, fontFamily: "inherit", outline: "none",
-                }}>
-                  <option>All Students & Staff</option>
-                  <option>Students Only</option>
-                  <option>Parents Only</option>
-                  <option>Staff Only</option>
-                  <option>Class 10-A</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 5 }}>Subject</label>
-                <input
-                  required value={subject} onChange={e => setSubject(e.target.value)}
-                  placeholder="e.g. Annual Sports Day — 15 April"
-                  style={{
-                    width: "100%", height: 36, border: "1px solid var(--border)", borderRadius: 7,
-                    padding: "0 12px", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
-                  }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", display: "block", marginBottom: 5 }}>Message</label>
-                <textarea
-                  required value={body} onChange={e => setBody(e.target.value)}
-                  placeholder="Write your announcement here…"
-                  rows={5}
-                  style={{
-                    width: "100%", border: "1px solid var(--border)", borderRadius: 7,
-                    padding: "10px 12px", fontSize: 13, fontFamily: "inherit", outline: "none",
-                    resize: "vertical", boxSizing: "border-box",
-                  }}
-                />
-              </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-                <button type="button" onClick={() => setCompose(false)} style={{
-                  height: 36, padding: "0 16px", border: "1px solid var(--border)", borderRadius: 7,
-                  background: "#fff", fontSize: 13, cursor: "pointer",
-                }}>Cancel</button>
-                <button type="submit" style={{
-                  height: 36, padding: "0 20px", border: "none", borderRadius: 7,
-                  background: sent ? "#10b981" : "var(--blue)", color: "#fff", fontSize: 13,
-                  fontWeight: 500, cursor: "pointer", transition: "background 0.2s",
-                }}>{sent ? "✓ Sent!" : "Send Announcement"}</button>
-              </div>
-            </form>
-          </div>
+          ))}
         </div>
-      )}
 
-      {/* ── MAIN LAYOUT ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 16, alignItems: "start" }}>
-
-        {/* LEFT — list */}
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--border)", display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {["all", "announcement", "message", "alert"].map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                style={{
-                  height: 26, padding: "0 10px", borderRadius: 20, fontSize: 11, fontWeight: 500,
-                  border: "1px solid",
-                  borderColor: filter === f ? "var(--blue)" : "var(--border)",
-                  background: filter === f ? "#eff6ff" : "#fff",
-                  color: filter === f ? "var(--blue)" : "var(--text-muted)",
-                  cursor: "pointer", textTransform: "capitalize",
-                }}
-              >{f === "all" ? "All" : TYPE_META[f]?.label}</button>
-            ))}
-          </div>
-
-          <div style={{ maxHeight: 480, overflowY: "auto" }}>
-            {items.map(item => {
-              const meta = TYPE_META[item.type];
-              const isActive = (active?.id === item.id);
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => setSelected(item.id)}
-                  style={{
-                    padding: "14px 16px", cursor: "pointer", borderBottom: "1px solid var(--border)",
-                    background: isActive ? "#f8faff" : "#fff",
-                    borderLeft: isActive ? "3px solid var(--blue)" : "3px solid transparent",
-                    transition: "background 0.15s",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: "50%", background: item.color,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0,
-                      }}>{item.initials}</div>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)" }}>{item.from}</span>
-                    </div>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{item.time}</span>
+        {/* Compose Modal */}
+        {compose && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ background: "#fff", borderRadius: 16, width: 520, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", padding: "28px 32px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>New Announcement</div>
+                <button onClick={() => setCompose(false)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#9ca3af" }}>✕</button>
+              </div>
+              <form onSubmit={handleSend} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={LBL}>Type</label>
+                    <select style={INP} value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
+                      <option value="announcement">Announcement</option>
+                      <option value="message">Message</option>
+                      <option value="alert">Alert</option>
+                    </select>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 3, paddingLeft: 36 }}>{item.title}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)", paddingLeft: 36, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.body}</div>
-                  <div style={{ paddingLeft: 36, marginTop: 6 }}>
-                    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: meta.bg, color: meta.color }}>{meta.label}</span>
-                    {item.pinned && <span style={{ fontSize: 10, marginLeft: 5, color: "var(--text-muted)" }}>📌 Pinned</span>}
+                  <div>
+                    <label style={LBL}>Audience</label>
+                    <select style={INP} value={form.audience} onChange={e => setForm(p => ({ ...p, audience: e.target.value }))}>
+                      {["All", "Students", "Parents", "Teachers", "Admin"].map(a => <option key={a}>{a}</option>)}
+                    </select>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* RIGHT — detail */}
-        {active ? (
-          <div className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: "50%", background: active.color,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 14, fontWeight: 700, color: "#fff", flexShrink: 0,
-                }}>{active.initials}</div>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", marginBottom: 3 }}>{active.title}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>From: <strong>{active.from}</strong> · {active.time} · To: {active.audience}</div>
+                  <label style={LBL}>Title *</label>
+                  <input required style={INP} placeholder="e.g. Annual Sports Day — 15 April" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} />
                 </div>
-              </div>
-              <span style={{
-                fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20,
-                background: TYPE_META[active.type].bg, color: TYPE_META[active.type].color,
-              }}>{TYPE_META[active.type].label}</span>
+                <div>
+                  <label style={LBL}>Message *</label>
+                  <textarea required value={form.body} onChange={e => setForm(p => ({ ...p, body: e.target.value }))}
+                    placeholder="Write your announcement here…" rows={5}
+                    style={{ ...INP, height: "auto", padding: "10px 12px", resize: "vertical", width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button type="button" onClick={() => setCompose(false)} style={BtnS.cancel}>Cancel</button>
+                  <button type="submit" disabled={sending} style={{ ...BtnS.primary, background: sent ? "#10b981" : "#0066ff" }}>
+                    {sent ? "✓ Sent!" : sending ? "Sending…" : "Send Announcement"}
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <div style={{
-              fontSize: 14, color: "var(--text-primary)", lineHeight: 1.7,
-              padding: "16px", background: "var(--bg)", borderRadius: 10, marginBottom: 20,
-            }}>
-              {active.body}
-            </div>
-
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => setCompose(true)}
-                style={{
-                  height: 34, padding: "0 16px", fontSize: 13, fontWeight: 500,
-                  border: "none", borderRadius: 7, background: "var(--blue)", color: "#fff", cursor: "pointer",
-                }}
-              >↩ Reply</button>
-              <button style={{
-                height: 34, padding: "0 14px", fontSize: 13,
-                border: "1px solid var(--border)", borderRadius: 7, background: "#fff", cursor: "pointer",
-              }}>↗ Forward</button>
-            </div>
-          </div>
-        ) : (
-          <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200, color: "var(--text-muted)", fontSize: 13 }}>
-            Select a message to view
           </div>
         )}
+
+        {/* Main layout */}
+        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 16, alignItems: "start" }}>
+          {/* Left - list */}
+          <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid #e8eaed", display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {["all", "announcement", "message", "alert"].map(f => (
+                <button key={f} onClick={() => setFilter(f)} style={{
+                  height: 26, padding: "0 10px", borderRadius: 20, fontSize: 11, fontWeight: 500,
+                  border: "1px solid", cursor: "pointer", textTransform: "capitalize",
+                  borderColor: filter === f ? "#0066ff" : "#e8eaed",
+                  background: filter === f ? "#eff4ff" : "#fff",
+                  color: filter === f ? "#0066ff" : "#9ca3af",
+                }}>{f === "all" ? "All" : TYPE_META[f]?.label}</button>
+              ))}
+            </div>
+            <div style={{ maxHeight: 520, overflowY: "auto" }}>
+              {loading ? (
+                <div style={{ padding: 24, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>Loading…</div>
+              ) : items.length === 0 ? (
+                <div style={{ padding: 24, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No {filter === "all" ? "" : filter}s yet</div>
+              ) : items.map(item => {
+                const meta = TYPE_META[item.type] || TYPE_META.announcement;
+                const isActive = active?.id === item.id;
+                const initials = (item.from_name || "eS").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+                return (
+                  <div key={item.id} onClick={() => setSelected(item.id)} style={{
+                    padding: "14px 16px", cursor: "pointer", borderBottom: "1px solid #f0f2f5",
+                    background: isActive ? "#f8faff" : "#fff",
+                    borderLeft: isActive ? "3px solid #0066ff" : "3px solid transparent",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,#0066ff,#6366f1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{initials}</div>
+                        <span style={{ fontSize: 12, fontWeight: 500 }}>{item.from_name || "Admin"}</span>
+                      </div>
+                      <span style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(item.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, paddingLeft: 36, marginBottom: 3 }}>{item.title}</div>
+                    <div style={{ fontSize: 12, color: "#9ca3af", paddingLeft: 36, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.body}</div>
+                    <div style={{ paddingLeft: 36, marginTop: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: meta.bg, color: meta.color }}>{meta.label}</span>
+                      {item.audience && <span style={{ fontSize: 10, marginLeft: 6, color: "#9ca3af" }}>→ {item.audience}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right - detail */}
+          {active ? (
+            <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "24px", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{active.title}</div>
+                  <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                    From: <strong>{active.from_name || "Admin"}</strong> · {new Date(active.created_at).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })} · To: {active.audience || "All"}
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: (TYPE_META[active.type] || TYPE_META.announcement).bg, color: (TYPE_META[active.type] || TYPE_META.announcement).color }}>
+                  {(TYPE_META[active.type] || TYPE_META.announcement).label}
+                </span>
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.8, padding: 16, background: "#f9fafb", borderRadius: 10, marginBottom: 20 }}>{active.body}</div>
+              {canCompose && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setCompose(true)} style={BtnS.primary}>↩ New Announcement</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200, color: "#9ca3af", fontSize: 13 }}>
+              {loading ? "Loading…" : "No announcements yet"}
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
 }
+
+const LBL = { fontSize: 12, fontWeight: 500, color: "#374151", display: "block", marginBottom: 5 };
+const INP = { height: 38, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 12px", fontSize: 13.5, fontFamily: "'DM Sans',sans-serif", outline: "none", background: "#fff", width: "100%", boxSizing: "border-box" };
+const BtnS = {
+  primary: { height: 36, padding: "0 16px", background: "#0066ff", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" },
+  cancel: { height: 36, padding: "0 16px", background: "none", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
+};

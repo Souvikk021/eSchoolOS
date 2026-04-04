@@ -79,6 +79,7 @@ export default function Sidebar() {
 
   const roleDisplayNames = {
     admin:      "School Admin",
+    superadmin: "Super Admin",
     teacher:    "Teacher",
     student:    "Student / Parent",
     accountant: "Accountant",
@@ -153,16 +154,19 @@ export default function Sidebar() {
       {/* ── Role Switcher Dropdown ── */}
       {roleSwitcherOpen && (
         <div className="role-switcher" ref={switcherRef}>
-          {Object.entries(ROLES).map(([key, r]) => (
-            <div
-              key={key}
-              className={`role-option${currentRole === key ? " active" : ""}`}
-              onClick={() => switchRole(key)}
-            >
-              <span className="role-dot" style={{ background: r.color }} />
-              {roleDisplayNames[key]}
-            </div>
-          ))}
+          {/* Merge student + parent into one entry; skip 'parent' key */}
+          {Object.entries(ROLES)
+            .filter(([key]) => key !== "parent")
+            .map(([key, r]) => (
+              <div
+                key={key}
+                className={`role-option${(currentRole === key || (key === "student" && currentRole === "parent")) ? " active" : ""}`}
+                onClick={() => switchRole(key)}
+              >
+                <span className="role-dot" style={{ background: r.color }} />
+                {roleDisplayNames[key] || key}
+              </div>
+            ))}
         </div>
       )}
     </>

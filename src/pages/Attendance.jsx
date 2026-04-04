@@ -1,185 +1,264 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
+import Topbar from "../components/Topbar";
 
-const CLASSES = ["All Classes", "6-A", "6-B", "7-A", "7-B", "8-A", "8-B", "9-A", "9-B", "10-A", "10-B", "11-S", "12-S"];
+function Badge({ status }) {
+  const map = { present: ["#ecfdf5", "#059669"], absent: ["#fef2f2", "#dc2626"], late: ["#fffbeb", "#d97706"] };
+  const [bg, c] = map[status] || ["#f3f4f6", "#6b7280"];
+  return <span style={{ background: bg, color: c, fontSize: 11, fontWeight: 500, padding: "3px 8px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 }}>
+    <span style={{ width: 5, height: 5, borderRadius: "50%", background: c, display: "inline-block" }} />{status}
+  </span>;
+}
 
-const STUDENTS = [
-  { id: 1, name: "Aarav Roy",     initials: "AR", class: "10-A", roll: "01", color: "linear-gradient(135deg,#0066ff,#6366f1)" },
-  { id: 2, name: "Priya Mehta",   initials: "PM", class: "8-B",  roll: "14", color: "linear-gradient(135deg,#f59e0b,#ef4444)" },
-  { id: 3, name: "Sourav Khan",   initials: "SK", class: "12-S", roll: "22", color: "linear-gradient(135deg,#10b981,#0066ff)" },
-  { id: 4, name: "Neha Das",      initials: "ND", class: "6-A",  roll: "03", color: "linear-gradient(135deg,#8b5cf6,#ec4899)" },
-  { id: 5, name: "Rohit Gupta",   initials: "RG", class: "9-A",  roll: "08", color: "linear-gradient(135deg,#ef4444,#f59e0b)" },
-  { id: 6, name: "Ananya Singh",  initials: "AS", class: "10-A", roll: "02", color: "linear-gradient(135deg,#06b6d4,#0066ff)" },
-  { id: 7, name: "Karan Sharma",  initials: "KS", class: "11-S", roll: "17", color: "linear-gradient(135deg,#10b981,#059669)" },
-  { id: 8, name: "Riya Bose",     initials: "RB", class: "7-B",  roll: "11", color: "linear-gradient(135deg,#ec4899,#8b5cf6)" },
-];
+/* ── TEACHER / ADMIN: Mark attendance ── */
+function MarkAttendance({ user }) {
+  const [classes, setClasses] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [selClass, setSelClass] = useState("");
+  const [selSec, setSelSec] = useState("");
+  const [attMap, setAttMap] = useState({});   // studentId → "present"|"absent"|"late"
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const today = new Date().toISOString().split("T")[0];
 
-const TODAY = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric" });
+  useEffect(() => {
+    supabase.from("classes").select("*").eq("school_id", user.school_id)
+      .then(({ data }) => setClasses(data || []));
+  }, []);
+
+  useEffect(() => {
+    if (!selClass) { setSections([]); setStudents([]); return; }
+    supabase.from("sections").select("*").eq("class_id", selClass)
+      .then(({ data }) => setSections(data || []));
+  }, [selClass]);
+
+  useEffect(() => {
+    if (!selClass) { setStudents([]); return; }
+    let q = supabase.from("students").select("id, full_name, roll_number")
+      .eq("class_id", selClass).eq("school_id", user.school_id);
+    if (selSec) q = q.eq("section_id", selSec);
+    q.order("roll_number").then(({ data }) => {
+      setStudents(data || []);
+      const map = {};
+      (data || []).forEach(s => map[s.id] = "present");
+      setAttMap(map);
+      setSaved(false);
+    });
+  }, [selClass, selSec]);
+
+  // Check existing attendance for today
+  useEffect(() => {
+    if (!students.length) return;
+    supabase.from("attendance").select("student_id, status").eq("date", today)
+      .in("student_id", students.map(s => s.id))
+      .then(({ data }) => {
+        if (data?.length) {
+          const map = { ...attMap };
+          data.forEach(r => { map[r.student_id] = r.status; });
+          setAttMap(map);
+        }
+      });
+  }, [students]);
+
+  async function saveAttendance() {
+    if (!students.length) return;
+    setSaving(true);
+    const rows = students.map(s => ({
+      school_id: user.school_id,
+      student_id: s.id,
+      class_id: selClass,
+      section_id: selSec || null,
+      marked_by: user.id,
+      status: attMap[s.id] || "present",
+      date: today,
+    }));
+    await supabase.from("attendance").upsert(rows, { onConflict: "student_id,date" });
+    setSaving(false);
+    setSaved(true);
+  }
+
+  const presentCount = Object.values(attMap).filter(v => v === "present").length;
+  const absentCount = Object.values(attMap).filter(v => v === "absent").length;
+
+  return (
+    <div style={{ padding: "24px 28px" }}>
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={FLD}>
+          <label style={LBL}>Class</label>
+          <select style={SEL} value={selClass} onChange={e => { setSelClass(e.target.value); setSelSec(""); }}>
+            <option value="">Select class</option>
+            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div style={FLD}>
+          <label style={LBL}>Section</label>
+          <select style={SEL} value={selSec} onChange={e => setSelSec(e.target.value)} disabled={!selClass}>
+            <option value="">All sections</option>
+            {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          {saved && <span style={{ fontSize: 13, color: "#059669" }}>✓ Saved!</span>}
+          <button style={BtnS.ghost} onClick={() => { const m = { ...attMap }; students.forEach(s => m[s.id] = "present"); setAttMap(m); }}>
+            All Present
+          </button>
+          <button style={BtnS.primary} onClick={saveAttendance} disabled={saving || !students.length}>
+            {saving ? "Saving…" : "Save Attendance"}
+          </button>
+        </div>
+      </div>
+
+      {students.length > 0 && (
+        <>
+          {/* Summary */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            {[
+              { label: "Present", val: presentCount, bg: "#ecfdf5", c: "#059669" },
+              { label: "Absent", val: absentCount, bg: "#fef2f2", c: "#dc2626" },
+              { label: "Total", val: students.length, bg: "#f0f2f5", c: "#374151" },
+            ].map(s => (
+              <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: "10px 20px", textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: s.c }}>{s.val}</div>
+                <div style={{ fontSize: 11, color: s.c, fontWeight: 500, marginTop: 2 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Student list */}
+          <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, overflow: "hidden" }}>
+            {students.map((s, i) => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: i < students.length - 1 ? "1px solid #f0f2f5" : "none", background: attMap[s.id] === "absent" ? "#fff8f8" : "transparent" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontFamily: "monospace", fontSize: 12, color: "#9ca3af", width: 28 }}>{s.roll_number}</span>
+                  <span style={{ fontSize: 14, fontWeight: 500 }}>{s.full_name}</span>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["present", "absent", "late"].map(v => (
+                    <button key={v} onClick={() => setAttMap(p => ({ ...p, [s.id]: v }))}
+                      style={{
+                        height: 28, padding: "0 12px", borderRadius: 6, border: "1px solid", cursor: "pointer", fontSize: 12, fontWeight: 500, fontFamily: "inherit",
+                        ...(attMap[s.id] === v
+                          ? { background: v === "present" ? "#059669" : v === "absent" ? "#dc2626" : "#d97706", color: "#fff", borderColor: "transparent" }
+                          : { background: "#fff", color: "#6b7280", borderColor: "#e5e7eb" })
+                      }}>
+                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {!selClass && (
+        <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af", fontSize: 14 }}>
+          Select a class to mark attendance
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── STUDENT / PARENT: View attendance ── */
+function ViewAttendance({ user, isParent }) {
+  const { currentRole } = useApp();
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [studentInfo, setStudentInfo] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      let studentId;
+      if (isParent) {
+        const { data } = await supabase.from("parents").select("student_id, students(full_name, roll_number, classes(name))").eq("user_id", user.id).single();
+        if (data) { studentId = data.student_id; setStudentInfo(data.students); }
+      } else {
+        const { data } = await supabase.from("students").select("id, full_name, roll_number, classes(name)").eq("user_id", user.id).single();
+        if (data) { studentId = data.id; setStudentInfo(data); }
+      }
+      if (!studentId) { setLoading(false); return; }
+
+      const { data: att } = await supabase.from("attendance").select("date, status")
+        .eq("student_id", studentId).order("date", { ascending: false }).limit(30);
+      setRecords(att || []);
+      setLoading(false);
+    }
+    load();
+  }, [user]);
+
+  const present = records.filter(r => r.status === "present").length;
+  const absent = records.filter(r => r.status === "absent").length;
+  const pct = records.length ? Math.round((present / records.length) * 100) : 0;
+
+  return (
+    <div style={{ padding: "24px 28px" }}>
+      {studentInfo && (
+        <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: 20, marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>{studentInfo.full_name}</div>
+            <div style={{ fontSize: 13, color: "#6b7280" }}>{studentInfo.classes?.name} · Roll {studentInfo.roll_number}</div>
+          </div>
+          <div style={{ display: "flex", gap: 20 }}>
+            {[{ l: "Present", v: present, c: "#059669" }, { l: "Absent", v: absent, c: "#dc2626" }, { l: "Rate", v: pct + "%", c: "#0066ff" }].map(s => (
+              <div key={s.l} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: s.c }}>{s.v}</div>
+                <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 500 }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr>{["Date", "Day", "Status"].map(h => <th key={h} style={{ textAlign: "left", fontSize: 11, fontWeight: 600, color: "#9ca3af", letterSpacing: "0.5px", textTransform: "uppercase", padding: "10px 16px", borderBottom: "1px solid #e8eaed" }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {loading ? <tr><td colSpan={3} style={{ padding: 20, textAlign: "center", color: "#9ca3af" }}>Loading…</td></tr>
+              : records.length === 0 ? <tr><td colSpan={3} style={{ padding: 20, textAlign: "center", color: "#9ca3af" }}>No attendance records found</td></tr>
+                : records.map((r, i) => {
+                  const d = new Date(r.date);
+                  return (
+                    <tr key={i}>
+                      <td style={{ padding: "11px 16px", fontSize: 13, borderBottom: "1px solid #f0f2f5" }}>{d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
+                      <td style={{ padding: "11px 16px", fontSize: 13, borderBottom: "1px solid #f0f2f5", color: "#6b7280" }}>{d.toLocaleDateString("en-IN", { weekday: "long" })}</td>
+                      <td style={{ padding: "11px 16px", borderBottom: "1px solid #f0f2f5" }}><Badge status={r.status} /></td>
+                    </tr>
+                  );
+                })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 export default function Attendance() {
-  const [selectedClass, setSelectedClass] = useState("10-A");
-  const [attendance, setAttendance] = useState(
-    Object.fromEntries(STUDENTS.map(s => [s.id, null]))
-  );
-  const [saved, setSaved] = useState(false);
-
-  const filtered = STUDENTS.filter(s => selectedClass === "All Classes" || s.class === selectedClass);
-
-  function mark(id, status) {
-    setAttendance(a => ({ ...a, [id]: status }));
-    setSaved(false);
-  }
-
-  function markAll(status) {
-    const next = {};
-    filtered.forEach(s => { next[s.id] = status; });
-    setAttendance(a => ({ ...a, ...next }));
-    setSaved(false);
-  }
-
-  const present = filtered.filter(s => attendance[s.id] === "present").length;
-  const absent  = filtered.filter(s => attendance[s.id] === "absent").length;
-  const late    = filtered.filter(s => attendance[s.id] === "late").length;
-  const unmarked = filtered.filter(s => attendance[s.id] === null).length;
-  const pct = filtered.length ? Math.round(((present + late) / filtered.length) * 100) : 0;
+  const { currentUser, currentRole } = useApp();
+  const canMark = ["admin", "superadmin", "teacher"].includes(currentRole);
 
   return (
     <>
-      {/* ── STATS ── */}
-      <div className="stats-row">
-        <div className="stat-card">
-          <div className="stat-label"><span className="dot" style={{ background: "#10b981" }} />Present</div>
-          <div className="stat-value">{present}</div>
-          <div className="stat-change up">{pct}% attendance rate</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label"><span className="dot" style={{ background: "#ef4444" }} />Absent</div>
-          <div className="stat-value">{absent}</div>
-          <div className="stat-change down">{absent > 0 ? `${absent} notified` : "All present"}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label"><span className="dot" style={{ background: "#f59e0b" }} />Late</div>
-          <div className="stat-value">{late}</div>
-          <div className="stat-change" style={{ color: "var(--text-muted)" }}>marked late today</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label"><span className="dot" style={{ background: "#9ca3af" }} />Unmarked</div>
-          <div className="stat-value">{unmarked}</div>
-          <div className="stat-change" style={{ color: "var(--text-muted)" }}>of {filtered.length} students</div>
-        </div>
-      </div>
-
-      {/* ── MAIN CARD ── */}
-      <div className="card" style={{ marginTop: 0 }}>
-        <div className="card-header">
-          <div>
-            <div className="card-title">Mark Attendance</div>
-            <div className="card-sub">{TODAY}</div>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            {/* Class filter */}
-            <select
-              value={selectedClass}
-              onChange={e => setSelectedClass(e.target.value)}
-              style={{
-                height: 32, border: "1px solid var(--border)", borderRadius: 7,
-                padding: "0 10px", fontSize: 13, fontFamily: "inherit",
-                background: "#fff", color: "var(--text-primary)", outline: "none",
-              }}
-            >
-              {CLASSES.map(c => <option key={c}>{c}</option>)}
-            </select>
-
-            {/* Bulk actions */}
-            <button
-              onClick={() => markAll("present")}
-              style={{ height: 32, padding: "0 12px", fontSize: 12, fontWeight: 500, border: "1px solid #d1fae5", borderRadius: 7, background: "#ecfdf5", color: "#059669", cursor: "pointer" }}
-            >✓ All Present</button>
-            <button
-              onClick={() => markAll("absent")}
-              style={{ height: 32, padding: "0 12px", fontSize: 12, fontWeight: 500, border: "1px solid #fee2e2", borderRadius: 7, background: "#fef2f2", color: "#dc2626", cursor: "pointer" }}
-            >✗ All Absent</button>
-
-            {/* Save */}
-            <button
-              onClick={() => setSaved(true)}
-              style={{
-                height: 32, padding: "0 16px", fontSize: 13, fontWeight: 500,
-                border: "none", borderRadius: 7,
-                background: saved ? "#ecfdf5" : "var(--blue)",
-                color: saved ? "#059669" : "#fff", cursor: "pointer",
-                transition: "all 0.2s",
-              }}
-            >{saved ? "✓ Saved" : "Save Attendance"}</button>
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        {filtered.length > 0 && (
-          <div style={{ padding: "0 20px 12px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 5 }}>
-              <span>{present + late} of {filtered.length} marked present/late</span>
-              <span>{pct}%</span>
-            </div>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${pct}%`, background: pct >= 90 ? "#10b981" : pct >= 75 ? "#f59e0b" : "#ef4444" }} />
-            </div>
-          </div>
-        )}
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Class</th>
-                <th>Roll No.</th>
-                <th style={{ textAlign: "center" }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(s => {
-                const status = attendance[s.id];
-                return (
-                  <tr key={s.id}>
-                    <td>
-                      <div className="cell-user">
-                        <div className="cell-avatar" style={{ background: s.color }}>{s.initials}</div>
-                        {s.name}
-                      </div>
-                    </td>
-                    <td>{s.class}</td>
-                    <td style={{ fontFamily: "'DM Mono', monospace", fontSize: 13 }}>{s.roll}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                        {[
-                          { key: "present", label: "P", color: "#059669", bg: "#ecfdf5", border: "#a7f3d0" },
-                          { key: "late",    label: "L", color: "#d97706", bg: "#fffbeb", border: "#fde68a" },
-                          { key: "absent",  label: "A", color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
-                        ].map(({ key, label, color, bg, border }) => (
-                          <button
-                            key={key}
-                            onClick={() => mark(s.id, status === key ? null : key)}
-                            style={{
-                              width: 28, height: 28, borderRadius: 6, fontSize: 12, fontWeight: 700,
-                              border: `1.5px solid ${status === key ? border : "var(--border)"}`,
-                              background: status === key ? bg : "#fff",
-                              color: status === key ? color : "var(--text-muted)",
-                              cursor: "pointer", transition: "all 0.15s",
-                            }}
-                          >{label}</button>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--text-muted)", padding: 32 }}>No students in this class</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Topbar
+        title="Attendance"
+        sub={canMark ? "Mark & manage daily attendance" : "My attendance record"}
+        actions={null}
+      />
+      {canMark
+        ? <MarkAttendance user={currentUser} />
+        : <ViewAttendance user={currentUser} isParent={currentRole === "parent"} />
+      }
     </>
   );
 }
+
+const FLD = { display: "flex", flexDirection: "column", gap: 5 };
+const LBL = { fontSize: 12, fontWeight: 500, color: "#374151" };
+const SEL = { height: 36, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 28px 0 12px", fontSize: 13.5, fontFamily: "'DM Sans',sans-serif", outline: "none", background: "#fff", minWidth: 160, cursor: "pointer" };
+const BtnS = {
+  primary: { height: 36, padding: "0 16px", background: "#0066ff", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" },
+  ghost: { height: 36, padding: "0 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
+};

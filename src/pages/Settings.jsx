@@ -1,60 +1,94 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
+import Topbar from "../components/Topbar";
 
-function SchoolSettingsTab() {
+/* ── School Settings Tab ── */
+function SchoolSettingsTab({ schoolId }) {
+  const [school, setSchool] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase.from("schools").select("*").eq("id", schoolId).single();
+      if (data) { setSchool(data); setForm(data); }
+      setLoading(false);
+    }
+    load();
+  }, [schoolId]);
+
+  async function save() {
+    setSaving(true);
+    await supabase.from("schools").update({
+      name: form.name,
+      address: form.address,
+      phone: form.phone,
+      email: form.email,
+      principal_name: form.principal_name,
+      udise_code: form.udise_code,
+    }).eq("id", schoolId);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>Loading…</div>;
+
+  const FIELDS = [
+    { label: "School Name", key: "name" },
+    { label: "UDISE Code", key: "udise_code" },
+    { label: "Principal", key: "principal_name" },
+    { label: "Contact Email", key: "email", type: "email" },
+    { label: "Phone", key: "phone" },
+    { label: "Address", key: "address" },
+  ];
+
   return (
-    <div className="grid-2">
-      <div className="card">
-        <div className="card-header"><div className="card-title">School Profile</div></div>
-        <div className="card-body">
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {[
-              { label: "School Name",     value: "Delhi Public School, Newtown", type: "text" },
-              { label: "UDISE Code",      value: "19242000101",                  type: "text" },
-              { label: "Affiliation",     value: "CBSE — Board No. 1920021",      type: "text" },
-              { label: "Principal",       value: "Dr. Anita Sharma",             type: "text" },
-              { label: "Contact Email",   value: "admin@dpsnewtewn.edu.in",      type: "text" },
-              { label: "Phone",           value: "+91 33 2576 0000",             type: "text" },
-            ].map((f) => (
-              <div key={f.label}>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 5, display: "block" }}>{f.label}</label>
-                <input type={f.type} defaultValue={f.value} style={{ width: "100%" }} />
-              </div>
-            ))}
-            <button className="btn primary" style={{ justifyContent: "center" }}>Save Changes</button>
-          </div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+      <div style={C.card}>
+        <div style={C.header}><div style={C.title}>School Profile</div></div>
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+          {saved && <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#059669" }}>✓ Changes saved!</div>}
+          {FIELDS.map(f => (
+            <div key={f.key}>
+              <label style={LBL}>{f.label}</label>
+              <input type={f.type || "text"} style={INP} value={form[f.key] || ""} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={`Enter ${f.label.toLowerCase()}`} />
+            </div>
+          ))}
+          <button style={BtnS.primary} onClick={save} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</button>
         </div>
       </div>
+
       <div>
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-header"><div className="card-title">Academic Year</div></div>
-          <div className="card-body">
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 5, display: "block" }}>Current Academic Year</label>
-                <select style={{ width: "100%" }}><option>2025–2026</option><option>2024–2025</option></select>
-              </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 5, display: "block" }}>Session Start</label>
-                <input type="text" defaultValue="April 1, 2025" style={{ width: "100%" }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 5, display: "block" }}>Session End</label>
-                <input type="text" defaultValue="March 31, 2026" style={{ width: "100%" }} />
-              </div>
+        <div style={{ ...C.card, marginBottom: 16 }}>
+          <div style={C.header}><div style={C.title}>Academic Year</div></div>
+          <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+              <label style={LBL}>Current Academic Year</label>
+              <select style={INP}><option>2025–2026</option><option>2024–2025</option></select>
+            </div>
+            <div>
+              <label style={LBL}>Session Start</label>
+              <input type="text" style={INP} defaultValue="April 1, 2025" />
+            </div>
+            <div>
+              <label style={LBL}>Session End</label>
+              <input type="text" style={INP} defaultValue="March 31, 2026" />
             </div>
           </div>
         </div>
-        <div className="card">
-          <div className="card-header"><div className="card-title">Working Days</div></div>
-          <div className="card-body">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d, i) => (
-                <label key={d} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                  <input type="checkbox" defaultChecked={i < 6} />
-                  {d}
-                </label>
-              ))}
-            </div>
+        <div style={C.card}>
+          <div style={C.header}><div style={C.title}>Working Days</div></div>
+          <div style={{ padding: "16px 20px", display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => (
+              <label key={d} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                <input type="checkbox" defaultChecked={i < 6} />
+                {d}
+              </label>
+            ))}
           </div>
         </div>
       </div>
@@ -62,174 +96,203 @@ function SchoolSettingsTab() {
   );
 }
 
-function RolesPermissionsTab() {
-  const roles = [
-    { role: "School Admin", users: 2, permissions: ["Full Access"], color: "#0066ff" },
-    { role: "Teacher",      users: 68, permissions: ["Students", "Attendance", "Academics"], color: "#10b981" },
-    { role: "Accountant",   users: 3, permissions: ["Finance", "Reports"], color: "#8b5cf6" },
-    { role: "Student",      users: 1284, permissions: ["Own Profile", "Academics", "Attendance"], color: "#f59e0b" },
-    { role: "Parent",       users: 2190, permissions: ["Child Profile", "Fees", "Communication"], color: "#ef4444" },
-  ];
+/* ── User Management Tab ── */
+function UserManagementTab({ schoolId }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from("app_users")
+        .select("*")
+        .eq("school_id", schoolId)
+        .order("full_name");
+      setUsers(data || []);
+      setLoading(false);
+    }
+    load();
+  }, [schoolId]);
+
+  const roleColors = { admin: "blue", teacher: "green", accountant: "purple", student: "amber", parent: "red", superadmin: "red" };
+  const filtered = search ? users.filter(u => u.full_name?.toLowerCase().includes(search.toLowerCase()) || u.login_id?.toLowerCase().includes(search.toLowerCase())) : users;
+
   return (
     <>
-      <div className="card">
-        <div className="card-header">
-          <div><div className="card-title">Roles & Permissions</div><div className="card-sub">Define what each role can access</div></div>
-          <button className="btn primary sm">+ Create Role</button>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ position: "relative" }}>
+          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 14 }}>🔍</span>
+          <input style={{ ...INP, paddingLeft: 32, width: 240 }} placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Role</th><th>Users</th><th>Permissions</th><th></th></tr></thead>
-            <tbody>
-              {roles.map((r) => (
-                <tr key={r.role}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: r.color, display: "inline-block" }}></span>
-                      <span style={{ fontWeight: 500 }}>{r.role}</span>
-                    </div>
-                  </td>
-                  <td><span className="badge blue">{r.users.toLocaleString()} users</span></td>
-                  <td>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {r.permissions.map((p) => (
-                        <span key={p} className="badge green">{p}</span>
-                      ))}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button className="btn ghost sm">Edit</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      </div>
+      <div style={C.card}>
+        <table style={T.table}>
+          <thead>
+            <tr>{["User", "Login ID", "Role", "Status", ""].map(h => <th key={h} style={T.th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {loading ? <tr><td colSpan={5} style={T.td}>Loading…</td></tr>
+              : filtered.length === 0 ? <tr><td colSpan={5} style={{ ...T.td, textAlign: "center", color: "#9ca3af" }}>No users found</td></tr>
+                : filtered.map(u => {
+                  const initials = u.full_name?.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "??";
+                  const rc = roleColors[u.role] || "blue";
+                  const colorMap = { blue: "#0066ff", green: "#059669", purple: "#8b5cf6", amber: "#d97706", red: "#dc2626" };
+                  const bgMap = { blue: "#eff4ff", green: "#ecfdf5", purple: "#f5f3ff", amber: "#fffbeb", red: "#fef2f2" };
+                  return (
+                    <tr key={u.id}>
+                      <td style={T.td}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,#0066ff,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: "#fff", flexShrink: 0 }}>{initials}</div>
+                          <div>
+                            <div style={{ fontWeight: 500 }}>{u.full_name}</div>
+                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{u.login_id}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ ...T.td, fontFamily: "monospace", fontSize: 12 }}>{u.login_id}</td>
+                      <td style={T.td}>
+                        <span style={{ background: bgMap[rc], color: colorMap[rc], fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20, textTransform: "capitalize" }}>{u.role}</span>
+                      </td>
+                      <td style={T.td}>
+                        <span style={{ background: u.is_active !== false ? "#ecfdf5" : "#fef2f2", color: u.is_active !== false ? "#059669" : "#dc2626", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20 }}>
+                          {u.is_active !== false ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td style={T.td}><button style={BtnS.ghost}>View</button></td>
+                    </tr>
+                  );
+                })}
+          </tbody>
+        </table>
+        <div style={{ padding: "12px 16px", borderTop: "1px solid #f0f2f5" }}>
+          <span style={{ fontSize: 12, color: "#9ca3af" }}>{filtered.length} users</span>
         </div>
       </div>
     </>
   );
 }
 
-function UserManagementTab() {
-  const users = [
-    { name: "Dr. Anita Sharma",  email: "anita@dps.edu", role: "Admin",     last: "2m ago",    status: "green" },
-    { name: "Ramesh Sharma",     email: "ramesh@dps.edu",role: "Teacher",   last: "25m ago",   status: "green" },
-    { name: "Anita Bose",        email: "bose@dps.edu",  role: "Teacher",   last: "3h ago",    status: "green" },
-    { name: "Sunita Rao",        email: "sunita@dps.edu",role: "Accountant",last: "Yesterday", status: "amber" },
-    { name: "Vijay Kumar",       email: "vijay@dps.edu", role: "Teacher",   last: "4h ago",    status: "green" },
-  ];
-  const roleColors = { Admin: "blue", Teacher: "green", Accountant: "purple", Student: "amber" };
+/* ── Fee Types Tab ── */
+function FeeTypesTab({ schoolId }) {
+  const [feeTypes, setFeeTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", amount: "" });
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    const { data } = await supabase.from("fee_types").select("*").eq("school_id", schoolId).order("name");
+    setFeeTypes(data || []);
+    setLoading(false);
+  }
+  useEffect(() => { load(); }, [schoolId]);
+
+  async function add() {
+    if (!form.name || !form.amount) return;
+    setSaving(true);
+    await supabase.from("fee_types").insert([{ school_id: schoolId, name: form.name, amount: parseInt(form.amount) }]);
+    setSaving(false);
+    setForm({ name: "", amount: "" });
+    setShowAdd(false);
+    load();
+  }
+
   return (
     <>
-      <div className="input-row">
-        <div className="input-wrap">
-          <span className="input-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-          </span>
-          <input type="text" placeholder="Search users..." />
-        </div>
-        <select><option>All Roles</option><option>Admin</option><option>Teacher</option><option>Accountant</option></select>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button className="btn">↑ Import Users</button>
-          <button className="btn primary">+ Add User</button>
-        </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+        <button style={BtnS.primary} onClick={() => setShowAdd(v => !v)}>+ Add Fee Type</button>
       </div>
-      <div className="card">
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>User</th><th>Role</th><th>Last Active</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.email}>
-                  <td>
-                    <div className="cell-user">
-                      <div className="cell-avatar">{u.name.split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
-                      <div>
-                        <div style={{ fontWeight: 500 }}>{u.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{u.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span className={`badge ${roleColors[u.role] || "blue"}`}>{u.role}</span></td>
-                  <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{u.last}</td>
-                  <td><span className={`badge ${u.status}`}>{u.status === "green" ? "Active" : "Idle"}</span></td>
-                  <td>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button className="btn ghost sm">Edit</button>
-                      <button className="btn danger sm">Disable</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function IntegrationsTab() {
-  const integrations = [
-    { name: "Razorpay",     desc: "Online fee collection & payment gateway",  icon: "💳", status: "green", label: "Connected" },
-    { name: "WhatsApp API", desc: "Automated parent & student messaging",     icon: "💬", status: "green", label: "Connected" },
-    { name: "Google Meet",  desc: "Online classes & parent meetings",          icon: "📹", status: "amber", label: "Setup Needed" },
-    { name: "SMS Gateway",  desc: "Bulk SMS via Textlocal / MSG91",           icon: "📱", status: "green", label: "Connected" },
-    { name: "Google Drive", desc: "Study materials & document storage",       icon: "📂", status: "red",   label: "Not Connected" },
-    { name: "Zoom",         desc: "Online classes & webinars",                icon: "🎥", status: "red",   label: "Not Connected" },
-  ];
-  return (
-    <div className="grid-3">
-      {integrations.map((intg) => (
-        <div key={intg.name} className="card">
-          <div className="card-body">
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-              <div style={{ fontSize: 28 }}>{intg.icon}</div>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{intg.name}</div>
-                <span className={`badge ${intg.status}`}>{intg.label}</span>
-              </div>
+      {showAdd && (
+        <div style={{ ...C.card, marginBottom: 16, padding: "20px 24px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 12, alignItems: "end" }}>
+            <div>
+              <label style={LBL}>Fee Type Name *</label>
+              <input style={INP} placeholder="e.g. Tuition Fee" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
             </div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 14, lineHeight: 1.5 }}>{intg.desc}</div>
-            <button className={`btn sm${intg.status === "red" ? " primary" : ""}`} style={{ width: "100%", justifyContent: "center" }}>
-              {intg.status === "green" ? "Configure" : intg.status === "amber" ? "Complete Setup" : "Connect"}
-            </button>
+            <div>
+              <label style={LBL}>Amount (₹) *</label>
+              <input type="number" style={INP} placeholder="5000" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
+            </div>
+            <button style={BtnS.primary} onClick={add} disabled={saving}>{saving ? "Adding…" : "Add"}</button>
           </div>
         </div>
-      ))}
-    </div>
+      )}
+      <div style={C.card}>
+        <table style={T.table}>
+          <thead><tr>{["Fee Type", "Amount", ""].map(h => <th key={h} style={T.th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {loading ? <tr><td colSpan={3} style={T.td}>Loading…</td></tr>
+              : feeTypes.length === 0 ? <tr><td colSpan={3} style={{ ...T.td, textAlign: "center", color: "#9ca3af" }}>No fee types configured</td></tr>
+                : feeTypes.map(f => (
+                  <tr key={f.id}>
+                    <td style={{ ...T.td, fontWeight: 500 }}>{f.name}</td>
+                    <td style={{ ...T.td, fontFamily: "monospace", fontWeight: 600 }}>₹{f.amount?.toLocaleString()}</td>
+                    <td style={T.td}><button style={BtnS.ghost}>Edit</button></td>
+                  </tr>
+                ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
+/* ── MAIN ── */
 const TABS = [
-  { id: "school",       label: "School Settings" },
-  { id: "roles",        label: "Roles & Permissions" },
-  { id: "users",        label: "User Management" },
-  { id: "integrations", label: "Integrations" },
+  { id: "school", label: "School Settings" },
+  { id: "users", label: "User Management" },
+  { id: "feeTypes", label: "Fee Types" },
 ];
 
 export default function Settings() {
+  const { currentUser, currentRole } = useApp();
   const [activeTab, setActiveTab] = useState("school");
+
+  if (!currentUser) return null;
+  const isAdmin = ["admin", "superadmin"].includes(currentRole);
+
   const views = {
-    school:       <SchoolSettingsTab />,
-    roles:        <RolesPermissionsTab />,
-    users:        <UserManagementTab />,
-    integrations: <IntegrationsTab />,
+    school: <SchoolSettingsTab schoolId={currentUser.school_id} />,
+    users: <UserManagementTab schoolId={currentUser.school_id} />,
+    feeTypes: <FeeTypesTab schoolId={currentUser.school_id} />,
   };
+
+  const visibleTabs = isAdmin ? TABS : TABS.filter(t => t.id !== "users");
+
   return (
     <>
-      <div className="tab-row">
-        {TABS.map((t) => (
-          <div key={t.id} className={`tab${activeTab === t.id ? " active" : ""}`} onClick={() => setActiveTab(t.id)}>
-            {t.label}
-          </div>
-        ))}
+      <Topbar title="Settings" sub="School configuration" />
+      <div style={{ padding: "24px 28px" }}>
+        <div style={{ display: "flex", gap: 2, borderBottom: "1px solid #e8eaed", marginBottom: 20 }}>
+          {visibleTabs.map(t => (
+            <div key={t.id} onClick={() => setActiveTab(t.id)} style={{
+              padding: "10px 16px", fontSize: 13.5, fontWeight: 500, cursor: "pointer",
+              borderBottom: activeTab === t.id ? "2px solid #0066ff" : "2px solid transparent",
+              marginBottom: -1, color: activeTab === t.id ? "#0066ff" : "#9ca3af",
+            }}>{t.label}</div>
+          ))}
+        </div>
+        {views[activeTab]}
       </div>
-      {views[activeTab]}
     </>
   );
 }
+
+/* ── STYLES ── */
+const LBL = { fontSize: 12, fontWeight: 500, color: "#374151", display: "block", marginBottom: 5 };
+const INP = { height: 38, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 12px", fontSize: 13.5, fontFamily: "'DM Sans',sans-serif", outline: "none", background: "#fff", width: "100%", boxSizing: "border-box" };
+const BtnS = {
+  primary: { height: 36, padding: "0 14px", background: "#0066ff", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" },
+  ghost: { height: 28, padding: "0 10px", background: "none", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, cursor: "pointer", fontFamily: "inherit" },
+};
+const C = {
+  card: { background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" },
+  header: { padding: "14px 20px", borderBottom: "1px solid #f0f2f5", display: "flex", alignItems: "center", justifyContent: "space-between" },
+  title: { fontSize: 14, fontWeight: 600 },
+};
+const T = {
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: { textAlign: "left", fontSize: 11, fontWeight: 600, color: "#9ca3af", letterSpacing: "0.5px", textTransform: "uppercase", padding: "10px 16px", borderBottom: "1px solid #e8eaed", whiteSpace: "nowrap" },
+  td: { padding: "12px 16px", fontSize: 13.5, borderBottom: "1px solid #f0f2f5", color: "#0f1117" },
+};
